@@ -1,6 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { streamText } from 'ai';
 import { searchDocuments, getEmbedding } from '@/lib/rag';
+import { getSupabaseAdmin } from '@/lib/supabase';
 
 // OpenRouter configuration
 const openrouter = createOpenAI({
@@ -16,22 +17,32 @@ export const runtime = 'edge';
  * It combines User Input + Search Context + System Personality.
  */
 export async function POST(req: Request) {
-  const { messages, department } = await req.json();
-  const lastMessage = messages[messages.length - 1]?.content || '';
+  const { messages, department, conversationId, userId } = await req.json();
+  const lastMessage = messages[messages.length - 1];
 
-  // STEP 1: RETRIEVAL (The 'R' in RAG)
-  // We turn the user's question into a vector and find relevant company info.
+  // STEP 1: PERSIST USER MESSAGE
+  // This allows for Chat History and future FAQ generation analysis.
+  if (conversationId && lastMessage) {
+    const supabase = getSupabaseAdmin();
+    await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      role: 'user',
+      content: lastMessage.content,
+      input_type: 'text'
+    });
+  }
+
+  // STEP 2: RETRIEVAL (The 'R' in RAG)
   let context = '';
   try {
-    const embedding = await getEmbedding(lastMessage);
+    const embedding = await getEmbedding(lastMessage.content);
     const docs = await searchDocuments(embedding, department);
     context = docs.map((d: any) => d.content_chunk).join('\n\n');
   } catch (err) {
     console.error('RAG Error:', err);
   }
   
-  // STEP 2: PROMPT ENGINEERING
-  // We give the AI a "System Prompt" that defines its behavior and provides the context.
+  // STEP 3: PROMPT ENGINEERING
   const systemPrompt = `
     You are an AI Onboarding Assistant for new employees.
     Your goal is to provide accurate, professional, and helpful information.
@@ -49,12 +60,22 @@ export async function POST(req: Request) {
     - Always maintain a professional and welcoming tone.
   `;
 
-  // STEP 3: GENERATION (The 'G' in RAG)
-  // We stream the response back to the user for a "real-time" typing effect.
+  // STEP 4: GENERATION & PERSISTENCE
+  // We stream the response and save the final result to the database when finished.
   const result = await streamText({
     model: openrouter('meta-llama/llama-3.3-70b-instruct:free'),
     system: systemPrompt,
     messages,
+    onFinish: async ({ text }) => {
+      if (conversationId) {
+        const supabase = getSupabaseAdmin();
+        await supabase.from('messages').insert({
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: text
+        });
+      }
+    }
   });
 
   return result.toDataStreamResponse();
