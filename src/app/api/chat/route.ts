@@ -10,11 +10,17 @@ const openrouter = createOpenAI({
 
 export const runtime = 'edge';
 
+/**
+ * CHAT API ROUTE
+ * This is the core "Orchestrator" of the AI response.
+ * It combines User Input + Search Context + System Personality.
+ */
 export async function POST(req: Request) {
   const { messages, department } = await req.json();
   const lastMessage = messages[messages.length - 1]?.content || '';
 
-  // 1. Retrieve relevant document chunks from Supabase (RAG)
+  // STEP 1: RETRIEVAL (The 'R' in RAG)
+  // We turn the user's question into a vector and find relevant company info.
   let context = '';
   try {
     const embedding = await getEmbedding(lastMessage);
@@ -24,7 +30,8 @@ export async function POST(req: Request) {
     console.error('RAG Error:', err);
   }
   
-  // 2. Construct System Prompt
+  // STEP 2: PROMPT ENGINEERING
+  // We give the AI a "System Prompt" that defines its behavior and provides the context.
   const systemPrompt = `
     You are an AI Onboarding Assistant for new employees.
     Your goal is to provide accurate, professional, and helpful information.
@@ -42,7 +49,8 @@ export async function POST(req: Request) {
     - Always maintain a professional and welcoming tone.
   `;
 
-  // 3. Call OpenRouter
+  // STEP 3: GENERATION (The 'G' in RAG)
+  // We stream the response back to the user for a "real-time" typing effect.
   const result = await streamText({
     model: openrouter('meta-llama/llama-3.3-70b-instruct:free'),
     system: systemPrompt,
