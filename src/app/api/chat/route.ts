@@ -3,10 +3,10 @@ import { streamText } from 'ai';
 import { searchDocuments, getEmbedding } from '@/lib/rag';
 import { getSupabaseAdmin } from '@/lib/supabase';
 
-// OpenRouter configuration
-const openrouter = createOpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
+// Initialize Groq Client using the OpenAI compatibility layer
+const groq = createOpenAI({
+  baseURL: 'https://api.groq.com/openai/v1',
+  apiKey: process.env.GROQ_API_KEY,
 });
 
 export const runtime = 'edge';
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
   // STEP 4: GENERATION & PERSISTENCE
   // We stream the response and save the final result to the database when finished.
   const result = await streamText({
-    model: openrouter('meta-llama/llama-3.3-70b-instruct:free'),
+    model: groq('llama-3.3-70b-versatile'),
     system: systemPrompt,
     messages,
     onFinish: async ({ text }) => {
