@@ -106,6 +106,7 @@ export default function ChatPage() {
             <option value="General">General</option>
             <option value="Engineering">Engineering</option>
             <option value="HR">HR</option>
+            <option value="Support">Customer Support</option>
           </select>
           <button className="action-btn"><MoreHorizontal size={20} /></button>
         </div>
