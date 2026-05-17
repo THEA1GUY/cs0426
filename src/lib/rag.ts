@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { getSupabaseAdmin } from './supabase';
 
 /**
  * SEARCH LOGIC (Retrieval)
@@ -7,6 +7,7 @@ import { supabase } from './supabase';
  * between the user's query and our stored document chunks.
  */
 export async function searchDocuments(queryEmbedding: number[], department: string, matchCount = 5) {
+  const supabase = getSupabaseAdmin();
   // We call a stored procedure (RPC) we defined in our Supabase database
   const { data, error } = await supabase.rpc('match_document_chunks', {
     query_embedding: queryEmbedding,
@@ -29,6 +30,7 @@ export async function searchDocuments(queryEmbedding: number[], department: stri
  * These numbers represent the "meaning" of the text in a high-dimensional space.
  */
 export async function getEmbedding(text: string) {
+  const supabase = getSupabaseAdmin();
   // We call our Supabase Edge Function which runs the 'gte-small' AI model
   const { data, error } = await supabase.functions.invoke('embed', {
     body: { input: text }

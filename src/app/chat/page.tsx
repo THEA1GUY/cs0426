@@ -85,6 +85,15 @@ export default function ChatPage() {
     }
   };
 
+  const handleCustomSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    handleSubmit(e, {
+      body: {
+        department,
+      },
+    });
+  };
+
   return (
     <div className="chat-container">
       <header className="chat-header glass">
@@ -162,7 +171,7 @@ export default function ChatPage() {
       <footer className="chat-footer glass">
         <div className="input-area">
           <button className="utility-btn"><Paperclip size={20} /></button>
-          <form onSubmit={handleSubmit} className="input-form">
+          <form onSubmit={handleCustomSubmit} className="input-form">
             <input
               value={input}
               onChange={handleInputChange}
