@@ -47,6 +47,31 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  if (user) {
+    // Check status and role from profiles table
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('status, role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile && profile.status !== 'active') {
+      // Force logout and redirect
+      await supabase.auth.signOut()
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'Access Denied: Your account has been suspended or blocked.')
+      return NextResponse.redirect(url)
+    }
+
+    // Role-based protection: Only admins can access /admin routes
+    if (request.nextUrl.pathname.startsWith('/admin') && (!profile || profile.role !== 'admin')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
+  }
+
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
   // creating a new response object with NextResponse.next() make sure to:
   // 1. Pass the request in it, like so:
