@@ -2,10 +2,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useChat } from 'ai/react';
-import { Mic, Send, Bot, User, Paperclip, MoreHorizontal, AlertCircle, Loader2 } from 'lucide-react';
+import { Mic, Send, Bot, User, Paperclip, MoreHorizontal, AlertCircle, Loader2, Square } from 'lucide-react';
 
 export default function ChatPage() {
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [department, setDepartment] = useState('General');
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -44,6 +45,7 @@ export default function ChatPage() {
         formData.append('file', audioBlob);
 
         try {
+          setIsTranscribing(true);
           const res = await fetch('/api/transcribe', {
             method: 'POST',
             body: formData,
@@ -55,6 +57,8 @@ export default function ChatPage() {
           }
         } catch (err) {
           console.error('Error transcribing audio:', err);
+        } finally {
+          setIsTranscribing(false);
         }
       };
 
@@ -166,10 +170,17 @@ export default function ChatPage() {
             />
             <button 
               type="button" 
-              className={`voice-btn ${isRecording ? 'recording' : ''}`}
+              className={`voice-btn ${isRecording ? 'recording' : ''} ${isTranscribing ? 'transcribing' : ''}`}
               onClick={toggleRecording}
+              disabled={isTranscribing}
             >
-              <Mic size={20} />
+              {isTranscribing ? (
+                <Loader2 className="spinner" size={20} />
+              ) : isRecording ? (
+                <Square size={16} fill="#ef4444" className="stop-icon" />
+              ) : (
+                <Mic size={20} />
+              )}
             </button>
             <button type="submit" className="send-btn" disabled={!input.trim() || isLoading}>
               <Send size={20} />
