@@ -58,10 +58,31 @@ export default function ChatPage() {
 
   // Verify auth session and load user profile
   useEffect(() => {
+    let isMounted = true;
+
     const checkSession = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      // 1. Try to get session from local storage/cookies quickly
+      const { data: { session } } = await supabase.auth.getSession();
+      let user = session?.user || null;
+
+      // 2. If no user from session, try getUser (fresh API request)
       if (!user) {
-        router.push('/login');
+        const { data: { user: freshUser } } = await supabase.auth.getUser();
+        user = freshUser;
+      }
+
+      // 3. Grace period check: if still no user, wait 300ms to allow client-side hydration to catch up, then try once more
+      if (!user) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const { data: { user: retryUser } } = await supabase.auth.getUser();
+        user = retryUser;
+      }
+
+      if (!user) {
+        if (isMounted) {
+          console.warn('No active session found. Redirecting to login.');
+          router.push('/login');
+        }
         return;
       }
 
@@ -72,16 +93,26 @@ export default function ChatPage() {
         .single();
 
       if (error || !profile) {
-        router.push('/login');
+        if (isMounted) {
+          console.error('Error fetching user profile:', error);
+          router.push('/login');
+        }
         return;
       }
 
-      setUserProfile(profile);
-      if (profile.department) {
-        setDepartment(profile.department);
+      if (isMounted) {
+        setUserProfile(profile);
+        if (profile.department) {
+          setDepartment(profile.department);
+        }
       }
     };
+
     checkSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Fetch list of conversations for sidebar
