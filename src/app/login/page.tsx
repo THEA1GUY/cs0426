@@ -1,13 +1,15 @@
 'use client';
 
+import React, { Suspense } from 'react'
 import { login, signup } from './actions'
-import { Bot, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react'
+import { Bot, Mail, Lock, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams: { message?: string; error?: string }
-}) {
+function LoginForm() {
+  const searchParamsHook = useSearchParams();
+  const error = searchParamsHook.get('error');
+  const message = searchParamsHook.get('message');
+
   return (
     <main className="login-page flex-center">
       <div className="login-card glass animate-fade">
@@ -47,17 +49,17 @@ export default function LoginPage({
             </div>
           </div>
 
-          {searchParams.error && (
+          {error && (
             <div className="status-message error">
               <AlertCircle size={18} />
-              <span>{decodeURIComponent(searchParams.error)}</span>
+              <span>{decodeURIComponent(error)}</span>
             </div>
           )}
 
-          {searchParams.message && (
+          {message && (
             <div className="status-message success">
               <CheckCircle size={18} />
-              <span>{decodeURIComponent(searchParams.message)}</span>
+              <span>{decodeURIComponent(message)}</span>
             </div>
           )}
 
@@ -77,6 +79,9 @@ export default function LoginPage({
           min-height: 100vh;
           background: radial-gradient(circle at bottom right, #1e293b 0%, #020617 100%);
           padding: 2rem;
+          display: flex;
+          justify-content: center;
+          align-items: center;
         }
 
         .login-card {
@@ -162,6 +167,8 @@ export default function LoginPage({
           border-radius: 8px;
           font-weight: 600;
           transition: background 0.2s;
+          cursor: pointer;
+          border: none;
         }
 
         .primary-btn:hover {
@@ -176,6 +183,7 @@ export default function LoginPage({
           border-radius: 8px;
           font-weight: 600;
           transition: background 0.2s;
+          cursor: pointer;
         }
 
         .secondary-btn:hover {
@@ -211,5 +219,54 @@ export default function LoginPage({
         }
       `}</style>
     </main>
-  )
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <main className="login-loader-page">
+        <div className="login-loader-card glass">
+          <Loader2 className="spinner" size={32} />
+          <p>Loading login portal...</p>
+        </div>
+        <style jsx>{`
+          .login-loader-page {
+            min-height: 100vh;
+            background: radial-gradient(circle at bottom right, #1e293b 0%, #020617 100%);
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+          }
+          .login-loader-card {
+            width: 100%;
+            max-width: 420px;
+            padding: 3rem;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            justify-content: center;
+            align-items: center;
+            border-radius: 12px;
+          }
+          .login-loader-card p {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            font-weight: 500;
+          }
+          .spinner {
+            color: var(--accent);
+            animation: spin 1s linear infinite;
+          }
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </main>
+    }>
+      <LoginForm />
+    </Suspense>
+  );
 }

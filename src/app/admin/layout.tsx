@@ -1,14 +1,49 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, FileText, Users, MessageSquare, LogOut } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [profile, setProfile] = useState<{ name: string; role: string } | null>(null);
+
+  useEffect(() => {
+    const getProfile = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('name, role')
+          .eq('id', user.id)
+          .single();
+        if (data) {
+          setProfile(data);
+        }
+      }
+    };
+    getProfile();
+  }, []);
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
+  const getInitials = (name: string) => {
+    if (!name) return 'AD';
+    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  };
+
   return (
     <div className="admin-container">
       <aside className="admin-sidebar glass">
@@ -18,26 +53,26 @@ export default function AdminLayout({
         </div>
         
         <nav className="sidebar-nav">
-          <Link href="/admin" className="nav-item active">
+          <Link href="/admin" className={`nav-item ${pathname === '/admin' ? 'active' : ''}`}>
             <LayoutDashboard size={20} />
             <span>Dashboard</span>
           </Link>
-          <Link href="/admin/documents" className="nav-item">
+          <Link href="/admin/documents" className={`nav-item ${pathname === '/admin/documents' ? 'active' : ''}`}>
             <FileText size={20} />
             <span>Documents</span>
           </Link>
-          <Link href="/admin/users" className="nav-item">
+          <Link href="/admin/users" className={`nav-item ${pathname === '/admin/users' ? 'active' : ''}`}>
             <Users size={20} />
             <span>Employees</span>
           </Link>
-          <Link href="/admin/escalations" className="nav-item">
+          <Link href="/admin/escalations" className={`nav-item ${pathname === '/admin/escalations' ? 'active' : ''}`}>
             <MessageSquare size={20} />
             <span>Escalations</span>
           </Link>
         </nav>
 
         <div className="sidebar-footer">
-          <button className="logout-btn">
+          <button onClick={handleSignOut} className="logout-btn">
             <LogOut size={20} />
             <span>Sign Out</span>
           </button>
@@ -50,8 +85,8 @@ export default function AdminLayout({
             <input type="text" placeholder="Search..." />
           </div>
           <div className="header-user">
-            <span>Admin User</span>
-            <div className="avatar">AD</div>
+            <span>{profile?.name || 'Admin User'}</span>
+            <div className="avatar">{getInitials(profile?.name || 'Admin')}</div>
           </div>
         </header>
         
@@ -59,6 +94,7 @@ export default function AdminLayout({
           {children}
         </div>
       </main>
+
 
       <style jsx>{`
         .admin-container {

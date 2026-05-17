@@ -36,6 +36,10 @@ export default function AdminUsers() {
   const [jobTitle, setJobTitle] = useState('');
   const [role, setRole] = useState<'new_employee' | 'department_head' | 'admin'>('new_employee');
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDepartment, setEditDepartment] = useState('');
+  const [editJobTitle, setEditJobTitle] = useState('');
+
   const fetchData = async () => {
     try {
       const res = await fetch('/api/admin/users');
@@ -102,6 +106,40 @@ export default function AdminUsers() {
     } catch (err: any) {
       setStatusMsg({ type: 'error', text: err.message });
     }
+  };
+
+  const handleDeleteUser = async (target: 'profile' | 'pre-register', identifier: string) => {
+    if (!confirm('Warning: Deleting this user will completely revoke their system access and remove them from the whitelist. Do you wish to proceed?')) return;
+    try {
+      const body = target === 'pre-register' 
+        ? { type: 'pre-register', email: identifier }
+        : { type: 'profile', id: identifier };
+
+      const res = await fetch('/api/admin/users', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete user');
+
+      setStatusMsg({ type: 'success', text: 'User successfully removed from system directory.' });
+      fetchData();
+    } catch (err: any) {
+      setStatusMsg({ type: 'error', text: err.message });
+    }
+  };
+
+  const startEditing = (id: string, currentDept: string, currentTitle: string) => {
+    setEditingId(id);
+    setEditDepartment(currentDept);
+    setEditJobTitle(currentTitle);
+  };
+
+  const handleSaveEdit = async (target: 'profile' | 'pre-register', identifier: string) => {
+    await handleUpdateUser(target, identifier, { department: editDepartment, job_title: editJobTitle });
+    setEditingId(null);
   };
 
   return (
@@ -200,11 +238,12 @@ export default function AdminUsers() {
                     <th>Dept / Title</th>
                     <th>Default Role</th>
                     <th>Security Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {preRegistered.length === 0 ? (
-                    <tr><td colSpan={4} className="text-center text-muted">No pre-registered staff yet.</td></tr>
+                    <tr><td colSpan={5} className="text-center text-muted">No pre-registered staff yet.</td></tr>
                   ) : (
                     preRegistered.map((u) => (
                       <tr key={u.email}>
@@ -215,10 +254,34 @@ export default function AdminUsers() {
                           </div>
                         </td>
                         <td>
-                          <div className="user-info">
-                            <strong>{u.department}</strong>
-                            <span>{u.job_title || 'N/A'}</span>
-                          </div>
+                          {editingId === u.email ? (
+                            <div className="edit-inline-inputs">
+                              <select 
+                                value={editDepartment} 
+                                onChange={(e) => setEditDepartment(e.target.value)}
+                                className="inline-select-small"
+                              >
+                                <option value="HR">HR</option>
+                                <option value="Engineering">Engineering</option>
+                                <option value="Support">Support</option>
+                                <option value="Sales">Sales</option>
+                                <option value="Marketing">Marketing</option>
+                                <option value="General">General</option>
+                              </select>
+                              <input 
+                                type="text"
+                                value={editJobTitle}
+                                onChange={(e) => setEditJobTitle(e.target.value)}
+                                className="inline-input"
+                                placeholder="Job Title"
+                              />
+                            </div>
+                          ) : (
+                            <div className="user-info">
+                              <strong>{u.department}</strong>
+                              <span>{u.job_title || 'N/A'}</span>
+                            </div>
+                          )}
                         </td>
                         <td>
                           <select 
@@ -233,6 +296,21 @@ export default function AdminUsers() {
                         </td>
                         <td>
                           <span className={`status-badge ${u.status}`}>{u.status}</span>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            {editingId === u.email ? (
+                              <div className="edit-actions-row">
+                                <button className="save-btn-small" onClick={() => handleSaveEdit('pre-register', u.email)}>Save</button>
+                                <button className="cancel-btn-small" onClick={() => setEditingId(null)}>Cancel</button>
+                              </div>
+                            ) : (
+                              <div className="edit-actions-row">
+                                <button className="edit-btn-icon" onClick={() => startEditing(u.email, u.department, u.job_title)} title="Edit Details"><Edit3 size={16} /></button>
+                                <button className="delete-btn-icon" onClick={() => handleDeleteUser('pre-register', u.email)} title="Delete User"><Trash2 size={16} /></button>
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -258,12 +336,13 @@ export default function AdminUsers() {
                     <th>Staff Name</th>
                     <th>Dept / Title</th>
                     <th>Assigned Role</th>
-                    <th>Access Actions</th>
+                    <th>Access Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {profiles.length === 0 ? (
-                    <tr><td colSpan={4} className="text-center text-muted">No active staff registered yet.</td></tr>
+                    <tr><td colSpan={5} className="text-center text-muted">No active staff registered yet.</td></tr>
                   ) : (
                     profiles.map((p) => (
                       <tr key={p.id}>
@@ -274,10 +353,34 @@ export default function AdminUsers() {
                           </div>
                         </td>
                         <td>
-                          <div className="user-info">
-                            <strong>{p.department || 'N/A'}</strong>
-                            <span>{p.job_title || 'N/A'}</span>
-                          </div>
+                          {editingId === p.id ? (
+                            <div className="edit-inline-inputs">
+                              <select 
+                                value={editDepartment} 
+                                onChange={(e) => setEditDepartment(e.target.value)}
+                                className="inline-select-small"
+                              >
+                                <option value="HR">HR</option>
+                                <option value="Engineering">Engineering</option>
+                                <option value="Support">Support</option>
+                                <option value="Sales">Sales</option>
+                                <option value="Marketing">Marketing</option>
+                                <option value="General">General</option>
+                              </select>
+                              <input 
+                                type="text"
+                                value={editJobTitle}
+                                onChange={(e) => setEditJobTitle(e.target.value)}
+                                className="inline-input"
+                                placeholder="Job Title"
+                              />
+                            </div>
+                          ) : (
+                            <div className="user-info">
+                              <strong>{p.department || 'N/A'}</strong>
+                              <span>{p.job_title || 'N/A'}</span>
+                            </div>
+                          )}
                         </td>
                         <td>
                           <select 
@@ -301,6 +404,21 @@ export default function AdminUsers() {
                               <option value="suspended">Suspended</option>
                               <option value="blocked">Blocked</option>
                             </select>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            {editingId === p.id ? (
+                              <div className="edit-actions-row">
+                                <button className="save-btn-small" onClick={() => handleSaveEdit('profile', p.id)}>Save</button>
+                                <button className="cancel-btn-small" onClick={() => setEditingId(null)}>Cancel</button>
+                              </div>
+                            ) : (
+                              <div className="edit-actions-row">
+                                <button className="edit-btn-icon" onClick={() => startEditing(p.id, p.department || 'General', p.job_title || '')} title="Edit Details"><Edit3 size={16} /></button>
+                                <button className="delete-btn-icon" onClick={() => handleDeleteUser('profile', p.id)} title="Delete User"><Trash2 size={16} /></button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -559,6 +677,101 @@ export default function AdminUsers() {
           background: rgba(239, 68, 68, 0.1);
           color: var(--error);
           border-color: rgba(239, 68, 68, 0.2);
+        }
+
+        .edit-inline-inputs {
+          display: flex;
+          flex-direction: column;
+          gap: 0.4rem;
+          max-width: 150px;
+        }
+
+        .inline-select-small {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          color: var(--text);
+          padding: 0.25rem 0.5rem;
+          border-radius: 4px;
+          font-size: 0.8125rem;
+          outline: none;
+        }
+
+        .inline-input {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          color: var(--text);
+          padding: 0.25rem 0.5rem;
+          border-radius: 4px;
+          font-size: 0.8125rem;
+          outline: none;
+        }
+
+        .inline-input:focus {
+          border-color: var(--accent);
+        }
+
+        .edit-actions-row {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .save-btn-small {
+          background: var(--success);
+          color: white;
+          border: none;
+          padding: 0.25rem 0.5rem;
+          border-radius: 4px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .save-btn-small:hover {
+          background: #1e7e34;
+        }
+
+        .cancel-btn-small {
+          background: rgba(255, 255, 255, 0.1);
+          color: var(--text);
+          border: 1px solid var(--border);
+          padding: 0.25rem 0.5rem;
+          border-radius: 4px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .cancel-btn-small:hover {
+          background: rgba(255, 255, 255, 0.2);
+        }
+
+        .edit-btn-icon, .delete-btn-icon {
+          background: transparent;
+          border: none;
+          padding: 0.35rem;
+          border-radius: 4px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s;
+        }
+
+        .edit-btn-icon {
+          color: var(--accent);
+        }
+
+        .edit-btn-icon:hover {
+          background: rgba(56, 189, 248, 0.1);
+        }
+
+        .delete-btn-icon {
+          color: var(--error);
+        }
+
+        .delete-btn-icon:hover {
+          background: rgba(239, 68, 68, 0.1);
         }
 
         .text-center { text-align: center; }

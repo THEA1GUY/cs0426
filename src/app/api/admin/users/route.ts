@@ -82,14 +82,20 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'Unauthorized: Admin access required.' }, { status: 403 });
   }
 
-  const { type, email, id, role, status } = await req.json();
+  const { type, email, id, role, status, department, job_title } = await req.json();
   const supabase = getSupabaseAdmin();
+
+  const updates: any = {};
+  if (role !== undefined) updates.role = role;
+  if (status !== undefined) updates.status = status;
+  if (department !== undefined) updates.department = department;
+  if (job_title !== undefined) updates.job_title = job_title;
 
   if (type === 'pre-register') {
     // update pre-registered record
     const { error } = await supabase
       .from('pre_registered_staff')
-      .update({ role, status })
+      .update(updates)
       .eq('email', email);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -97,7 +103,7 @@ export async function PUT(req: Request) {
     // update active profile
     const { error } = await supabase
       .from('profiles')
-      .update({ role, status })
+      .update(updates)
       .eq('id', id);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -107,8 +113,46 @@ export async function PUT(req: Request) {
     if (profile?.email) {
       await supabase
         .from('pre_registered_staff')
-        .update({ role, status })
+        .update(updates)
         .eq('email', profile.email);
+    }
+  }
+
+  return NextResponse.json({ success: true });
+}
+
+export async function DELETE(req: Request) {
+  const isAdmin = await verifyAdmin();
+  if (!isAdmin) {
+    return NextResponse.json({ error: 'Unauthorized: Admin access required.' }, { status: 403 });
+  }
+
+  const { type, email, id } = await req.json();
+  const supabase = getSupabaseAdmin();
+
+  if (type === 'pre-register') {
+    const { error } = await supabase
+      .from('pre_registered_staff')
+      .delete()
+      .eq('email', email);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  } else {
+    // Also remove from pre-registered if they exist
+    const { data: profile } = await supabase.from('profiles').select('email').eq('id', id).single();
+    if (profile?.email) {
+      await supabase
+        .from('pre_registered_staff')
+        .delete()
+        .eq('email', profile.email);
+    }
+
+    // Delete from auth.users (cascade will delete from profiles)
+    const { error: authError } = await supabase.auth.admin.deleteUser(id);
+    if (authError) {
+      // Fallback: delete from profiles directly
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     }
   }
 
