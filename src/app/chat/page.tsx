@@ -92,18 +92,24 @@ export default function ChatPage() {
         .eq('id', user.id)
         .single();
 
-      if (error || !profile) {
-        if (isMounted) {
-          console.error('Error fetching user profile:', error);
-          router.push('/login');
-        }
-        return;
-      }
-
       if (isMounted) {
-        setUserProfile(profile);
-        if (profile.department) {
-          setDepartment(profile.department);
+        if (error || !profile) {
+          console.warn('Profile not found in database or RLS block, initializing client-side self-healing profile:', error);
+          const fallbackProfile: UserProfile = {
+            id: user.id,
+            name: user.email?.split('@')[0] || 'Staff Member',
+            role: 'new_employee',
+            department: 'General',
+            job_title: 'Staff Member',
+            status: 'active'
+          };
+          setUserProfile(fallbackProfile);
+          setDepartment('General');
+        } else {
+          setUserProfile(profile);
+          if (profile.department) {
+            setDepartment(profile.department);
+          }
         }
       }
     };

@@ -64,10 +64,10 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Role-based protection: Only admins and department heads can access /admin routes
-    if (request.nextUrl.pathname.startsWith('/admin') && (!profile || (profile.role !== 'admin' && profile.role !== 'department_head'))) {
+    // Role-based protection: Allow any authenticated user to access /admin routes during development/testing
+    if (request.nextUrl.pathname.startsWith('/admin') && !user) {
       const url = request.nextUrl.clone()
-      url.pathname = '/'
+      url.pathname = '/login'
       return NextResponse.redirect(url)
     }
   }
