@@ -1,3 +1,5 @@
+'use client';
+
 import { login, signup } from './actions'
 import { Bot, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react'
 
