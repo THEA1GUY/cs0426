@@ -28,7 +28,11 @@ BEGIN
     d.department as document_department
   FROM document_embeddings de
   JOIN documents d ON de.document_id = d.id
-  WHERE (d.department = target_department OR d.department IS NULL)
+  WHERE (
+    d.department = target_department     -- exact department match
+    OR d.department = 'General'          -- general documents accessible to all
+    OR d.department IS NULL              -- legacy null-department documents
+  )
     AND 1 - (de.embedding <=> query_embedding) > match_threshold
   ORDER BY de.embedding <=> query_embedding
   LIMIT match_count;
