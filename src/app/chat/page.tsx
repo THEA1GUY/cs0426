@@ -71,13 +71,6 @@ export default function ChatPage() {
         user = freshUser;
       }
 
-      // 3. Grace period check: if still no user, wait 300ms to allow client-side hydration to catch up, then try once more
-      if (!user) {
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        const { data: { user: retryUser } } = await supabase.auth.getUser();
-        user = retryUser;
-      }
-
       if (!user) {
         if (isMounted) {
           console.warn('No active session found. Redirecting to login.');
@@ -384,6 +377,7 @@ export default function ChatPage() {
       const { error } = await supabase.storage
         .from('avatars')
         .upload(fileName, file, {
+          cacheControl: '3600',
           contentType: 'image/png',
           upsert: true
         });
@@ -489,7 +483,7 @@ export default function ChatPage() {
                     <Loader2 className="spinner" size={16} />
                   ) : !avatarError ? (
                     <img 
-                      src={`https://lipaoxkalejwkfcqdoqf.supabase.co/storage/v1/object/public/avatars/${userProfile.id}.png?t=${avatarTimestamp}`}
+                      src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${userProfile.id}.png?t=${avatarTimestamp}`}
                       alt={userProfile.name}
                       onError={() => setAvatarError(true)}
                     />
@@ -614,7 +608,7 @@ export default function ChatPage() {
                     {m.role === 'user' ? (
                       userProfile && !avatarError ? (
                         <img 
-                          src={`https://lipaoxkalejwkfcqdoqf.supabase.co/storage/v1/object/public/avatars/${userProfile.id}.png?t=${avatarTimestamp}`}
+                          src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${userProfile.id}.png?t=${avatarTimestamp}`}
                           alt={userProfile.name}
                           className="user-bubble-avatar"
                           onError={() => setAvatarError(true)}

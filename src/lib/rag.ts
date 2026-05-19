@@ -11,17 +11,17 @@ export async function searchDocuments(queryEmbedding: number[], department: stri
   // We call a stored procedure (RPC) we defined in our Supabase database
   const { data, error } = await supabase.rpc('match_document_chunks', {
     query_embedding: queryEmbedding,
-    match_threshold: 0.5, // 0.5 is a balanced threshold for similarity
+    match_threshold: 0.3, // Lowered threshold for better recall in onboarding context
     match_count: matchCount,
     target_department: department
   });
 
   if (error) {
     console.error('Error searching documents:', error);
-    return [];
+    throw new Error('Failed to retrieve relevant documents.');
   }
 
-  return data;
+  return data || [];
 }
 
 /**

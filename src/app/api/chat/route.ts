@@ -20,45 +20,46 @@ export async function POST(req: Request) {
   const { messages, department, conversationId, userId } = await req.json();
   const lastMessage = messages[messages.length - 1];
 
-  // STEP 1: PERSIST USER MESSAGE
-  // This allows for Chat History and future FAQ generation analysis.
-  if (conversationId && lastMessage) {
-    const supabase = getSupabaseAdmin();
-    await supabase.from('messages').insert({
-      conversation_id: conversationId,
-      role: 'user',
-      content: lastMessage.content,
-      input_type: 'text'
-    });
-  }
+  // PRE-PROCESSING: Run Guardrails, Embedding, and Persistence in parallel for maximum performance
+  const guardrailPrompt = `
+    You are a guardrail classifier for an AI Employee Onboarding Assistant.
+    Determine if the user's prompt is relevant to company onboarding, company culture, employee benefits, internal tools, department procedures, IT tools, or standard human resources.
+    If the prompt is off-topic (e.g., asking how to fix a car, write random coding algorithms, tell unrelated jokes, discuss politics, write general stories, etc.), return exactly "OFF_TOPIC".
+    If it is on-topic, return exactly "ON_TOPIC".
 
-  // STEP 1.5: LLM GUARDRAILS CHECK
-  try {
-    const guardrailPrompt = `
-      You are a guardrail classifier for an AI Employee Onboarding Assistant.
-      Determine if the user's prompt is relevant to company onboarding, company culture, employee benefits, internal tools, department procedures, IT tools, or standard human resources.
-      If the prompt is off-topic (e.g., asking how to fix a car, write random coding algorithms, tell unrelated jokes, discuss politics, write general stories, etc.), return exactly "OFF_TOPIC".
-      If it is on-topic, return exactly "ON_TOPIC".
-      
-      User Prompt: "${lastMessage.content}"
-      
-      Classification:
-    `;
+    User Prompt: "${lastMessage.content}"
 
-    const { text: classification } = await generateText({
+    Classification:
+  `;
+
+  const supabaseAdmin = getSupabaseAdmin();
+
+  // Run independent tasks in parallel to reduce overall latency
+  const [guardrailResult, embeddingResult] = await Promise.allSettled([
+    generateText({
       model: groq('llama-3.3-70b-versatile') as any,
       prompt: guardrailPrompt,
       maxTokens: 5,
       temperature: 0,
-    });
+    }),
+    getEmbedding(lastMessage.content),
+    // Fire-and-forget persistence of user message
+    conversationId && lastMessage ? supabaseAdmin.from('messages').insert({
+      conversation_id: conversationId,
+      role: 'user',
+      content: lastMessage.content,
+      input_type: 'text'
+    }) : Promise.resolve(null)
+  ]);
 
+  // Handle Guardrail result - if off-topic, we short-circuit
+  if (guardrailResult.status === 'fulfilled') {
+    const classification = guardrailResult.value.text;
     if (classification.trim().includes("OFF_TOPIC")) {
       const refusalText = "👋 Hello! I am your dedicated Company Onboarding Assistant. To ensure you have a seamless transition, I am focused on assisting with onboarding topics, employee handbook policies, internal tools, department procedures, or company culture. If you have a question about how our company operates, let me know! For other topics, feel free to use the 'Escalate to Human' button above to get help from your department head.";
       
-      // Persist the AI response too so chat history stays synced
       if (conversationId) {
-        const supabase = getSupabaseAdmin();
-        await supabase.from('messages').insert({
+        await supabaseAdmin.from('messages').insert({
           conversation_id: conversationId,
           role: 'assistant',
           content: refusalText
@@ -73,42 +74,22 @@ export async function POST(req: Request) {
       });
       return refusalResult.toDataStreamResponse();
     }
-  } catch (err) {
-    console.error('Guardrail check failed (bypassing for reliability):', err);
   }
 
   // STEP 2: RETRIEVAL (The 'R' in RAG) & CITATION JOINING
   let context = '';
 
-  try {
-    const embedding = await getEmbedding(lastMessage.content);
-    const docs = await searchDocuments(embedding, department);
-    
-    // Fetch actual document titles and departments for visual sources citing
-    const docIds = Array.from(new Set(docs.map((d: any) => d.document_id)));
-    const docMap: Record<string, { title: string; department: string }> = {};
+  if (embeddingResult.status === 'fulfilled') {
+    try {
+      const docs = await searchDocuments(embeddingResult.value, department);
 
-    if (docIds.length > 0) {
-      const supabase = getSupabaseAdmin();
-      const { data: documentsData } = await supabase
-        .from('documents')
-        .select('id, title, department')
-        .in('id', docIds);
-
-      if (documentsData) {
-        documentsData.forEach((d: any) => {
-          docMap[d.id] = { title: d.title, department: d.department || 'General' };
-        });
-      }
+      context = docs.map((d: any) => {
+        const sourceLabel = d.document_title ? `Document: "${d.document_title}" (Dept: ${d.document_department || 'General'})` : 'Document: Internal Wiki';
+        return `[${sourceLabel}]\n${d.content_chunk}`;
+      }).join('\n\n');
+    } catch (err) {
+      console.error('RAG Error:', err);
     }
-
-    context = docs.map((d: any) => {
-      const doc = docMap[d.document_id];
-      const sourceLabel = doc ? `Document: "${doc.title}" (Dept: ${doc.department})` : 'Document: Internal Wiki';
-      return `[${sourceLabel}]\n${d.content_chunk}`;
-    }).join('\n\n');
-  } catch (err) {
-    console.error('RAG Error:', err);
   }
   
   // STEP 3: PROMPT ENGINEERING
