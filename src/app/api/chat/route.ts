@@ -65,9 +65,13 @@ export async function POST(req: Request) {
         });
       }
 
-      return new Response(refusalText, {
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+      // Return as a proper AI data stream so useChat can render it
+      const refusalResult = await streamText({
+        model: groq('llama-3.3-70b-versatile') as any,
+        messages: [{ role: 'user', content: 'Say exactly this and nothing else: ' + refusalText }],
+        maxTokens: 200,
       });
+      return refusalResult.toDataStreamResponse();
     }
   } catch (err) {
     console.error('Guardrail check failed (bypassing for reliability):', err);

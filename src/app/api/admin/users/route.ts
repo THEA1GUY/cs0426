@@ -109,12 +109,19 @@ export async function PUT(req: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     // also sync to pre-registration if email exists
-    const { data: profile } = await supabase.from('profiles').select('email').eq('id', id).single();
-    if (profile?.email) {
+    // First try the email column on profiles (added by migration fix_rag_and_schema)
+    const { data: profileData } = await supabase.from('profiles').select('email').eq('id', id).single();
+    let profileEmail = profileData?.email;
+    // Fallback to auth.users if email column is null (users created before migration)
+    if (!profileEmail) {
+      const { data: authUser } = await supabase.auth.admin.getUserById(id);
+      profileEmail = authUser?.user?.email;
+    }
+    if (profileEmail) {
       await supabase
         .from('pre_registered_staff')
         .update(updates)
-        .eq('email', profile.email);
+        .eq('email', profileEmail);
     }
   }
 
@@ -139,12 +146,17 @@ export async function DELETE(req: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   } else {
     // Also remove from pre-registered if they exist
-    const { data: profile } = await supabase.from('profiles').select('email').eq('id', id).single();
-    if (profile?.email) {
+    const { data: profileData } = await supabase.from('profiles').select('email').eq('id', id).single();
+    let profileEmail = profileData?.email;
+    if (!profileEmail) {
+      const { data: authUser } = await supabase.auth.admin.getUserById(id);
+      profileEmail = authUser?.user?.email;
+    }
+    if (profileEmail) {
       await supabase
         .from('pre_registered_staff')
         .delete()
-        .eq('email', profile.email);
+        .eq('email', profileEmail);
     }
 
     // Delete from auth.users (cascade will delete from profiles)

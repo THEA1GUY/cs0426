@@ -56,7 +56,7 @@ export async function updateSession(request: NextRequest) {
       .single()
 
     if (profile && profile.status !== 'active') {
-      // Force logout and redirect
+      // Force logout and redirect suspended/blocked users
       await supabase.auth.signOut()
       const url = request.nextUrl.clone()
       url.pathname = '/login'
@@ -64,11 +64,15 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Role-based protection: Allow any authenticated user to access /admin routes during development/testing
-    if (request.nextUrl.pathname.startsWith('/admin') && !user) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
+    // Role-based protection: only admins and department_heads can access /admin
+    if (request.nextUrl.pathname.startsWith('/admin')) {
+      const allowedRoles = ['admin', 'department_head']
+      if (!profile || !allowedRoles.includes(profile.role)) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/chat'
+        url.searchParams.set('error', 'Access Denied: Insufficient permissions to access the admin panel.')
+        return NextResponse.redirect(url)
+      }
     }
   }
 
