@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useState } from 'react'
+import React, { Suspense, useState, useTransition } from 'react'
 import { login, signup, requestPasswordReset } from './actions'
 import { Bot, Mail, Lock, AlertCircle, CheckCircle, Loader2, ArrowLeft, KeyRound } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
@@ -12,6 +12,25 @@ function LoginForm() {
   const error = searchParamsHook.get('error');
   const message = searchParamsHook.get('message');
   const [mode, setMode] = useState<Mode>('login');
+  
+  // Transition state for server actions to provide instant loading feedback
+  const [isPending, startTransition] = useTransition();
+  const [activeAction, setActiveAction] = useState<'login' | 'signup' | 'forgot' | null>(null);
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>, actionFn: (fd: FormData) => Promise<void>, actionType: 'login' | 'signup' | 'forgot') => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    setActiveAction(actionType);
+    startTransition(async () => {
+      try {
+        await actionFn(formData);
+      } catch (err) {
+        // Redirects throw errors in Next.js which is expected behavior, 
+        // but we catch any other unforeseen errors here.
+        console.error(err);
+      }
+    });
+  };
 
   return (
     <main className="login-page flex-center">
@@ -21,7 +40,7 @@ function LoginForm() {
             {mode === 'forgot' ? (
               <KeyRound size={48} className="hero-icon" />
             ) : (
-              <Bot size={48} className="hero-icon" />
+              <Bot size={48} className="hero-icon animate-pulse" />
             )}
           </div>
           <h1>{mode === 'forgot' ? 'Reset Password' : 'Welcome Back'}</h1>
@@ -34,7 +53,11 @@ function LoginForm() {
 
         {/* ── FORGOT PASSWORD FORM ── */}
         {mode === 'forgot' && (
-          <form className="login-form" key="forgot">
+          <form 
+            className="login-form" 
+            onSubmit={(e) => handleSubmit(e, requestPasswordReset, 'forgot')}
+            key="forgot"
+          >
             <div className="form-group">
               <label htmlFor="reset-email">Email Address</label>
               <div className="input-with-icon">
@@ -44,18 +67,19 @@ function LoginForm() {
                   name="email"
                   type="email"
                   placeholder="you@company.com"
+                  disabled={isPending}
                   required
                 />
               </div>
             </div>
 
-            {error && (
+            {error && !isPending && (
               <div className="status-message error">
                 <AlertCircle size={18} />
                 <span>{decodeURIComponent(error)}</span>
               </div>
             )}
-            {message && (
+            {message && !isPending && (
               <div className="status-message success">
                 <CheckCircle size={18} />
                 <span>{decodeURIComponent(message)}</span>
@@ -63,13 +87,25 @@ function LoginForm() {
             )}
 
             <div className="form-actions">
-              <button formAction={requestPasswordReset} className="primary-btn">
-                Send Reset Link
+              <button 
+                type="submit" 
+                className="primary-btn" 
+                disabled={isPending}
+              >
+                {isPending && activeAction === 'forgot' ? (
+                  <>
+                    <Loader2 className="spinner" size={18} />
+                    <span>Sending reset link...</span>
+                  </>
+                ) : (
+                  'Send Reset Link'
+                )}
               </button>
               <button
                 type="button"
                 onClick={() => setMode('login')}
                 className="back-btn"
+                disabled={isPending}
               >
                 <ArrowLeft size={16} />
                 Back to Sign In
@@ -90,6 +126,7 @@ function LoginForm() {
                   name="email"
                   type="email"
                   placeholder="you@company.com"
+                  disabled={isPending}
                   required
                 />
               </div>
@@ -104,6 +141,7 @@ function LoginForm() {
                   name="password"
                   type="password"
                   placeholder="••••••••"
+                  disabled={isPending}
                   required
                   minLength={6}
                 />
@@ -112,18 +150,19 @@ function LoginForm() {
                 type="button"
                 onClick={() => setMode('forgot')}
                 className="forgot-link"
+                disabled={isPending}
               >
                 Forgot password?
               </button>
             </div>
 
-            {error && (
+            {error && !isPending && (
               <div className="status-message error">
                 <AlertCircle size={18} />
                 <span>{decodeURIComponent(error)}</span>
               </div>
             )}
-            {message && (
+            {message && !isPending && (
               <div className="status-message success">
                 <CheckCircle size={18} />
                 <span>{decodeURIComponent(message)}</span>
@@ -131,8 +170,44 @@ function LoginForm() {
             )}
 
             <div className="form-actions">
-              <button formAction={login} className="primary-btn">Log in</button>
-              <button formAction={signup} className="secondary-btn">Sign up</button>
+              <button 
+                formAction={(fd) => {
+                  setActiveAction('login');
+                  startTransition(async () => {
+                    await login(fd);
+                  });
+                }} 
+                className="primary-btn"
+                disabled={isPending}
+              >
+                {isPending && activeAction === 'login' ? (
+                  <>
+                    <Loader2 className="spinner" size={18} />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  'Log in'
+                )}
+              </button>
+              <button 
+                formAction={(fd) => {
+                  setActiveAction('signup');
+                  startTransition(async () => {
+                    await signup(fd);
+                  });
+                }} 
+                className="secondary-btn"
+                disabled={isPending}
+              >
+                {isPending && activeAction === 'signup' ? (
+                  <>
+                    <Loader2 className="spinner" size={18} />
+                    <span>Creating account...</span>
+                  </>
+                ) : (
+                  'Sign up'
+                )}
+              </button>
             </div>
           </form>
         )}
@@ -169,6 +244,15 @@ function LoginForm() {
 
         .hero-icon {
           color: var(--accent);
+        }
+
+        .animate-pulse {
+          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: .5; }
         }
 
         .login-header h1 {
@@ -226,6 +310,11 @@ function LoginForm() {
           font-family: inherit;
         }
 
+        .input-with-icon input:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
         .input-with-icon :global(svg) {
           color: var(--text-muted);
           flex-shrink: 0;
@@ -242,9 +331,14 @@ function LoginForm() {
           transition: opacity 0.2s;
         }
 
-        .forgot-link:hover {
+        .forgot-link:hover:not(:disabled) {
           opacity: 0.75;
           text-decoration: underline;
+        }
+
+        .forgot-link:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .form-actions {
@@ -255,6 +349,10 @@ function LoginForm() {
         }
 
         .primary-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
           background: var(--primary);
           color: white;
           padding: 0.75rem;
@@ -267,11 +365,20 @@ function LoginForm() {
           font-size: 0.9375rem;
         }
 
-        .primary-btn:hover {
+        .primary-btn:hover:not(:disabled) {
           background: var(--primary-hover);
         }
 
+        .primary-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
         .secondary-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
           background: transparent;
           border: 1px solid var(--border);
           color: var(--text);
@@ -284,8 +391,13 @@ function LoginForm() {
           font-size: 0.9375rem;
         }
 
-        .secondary-btn:hover {
+        .secondary-btn:hover:not(:disabled) {
           background: var(--surface);
+        }
+
+        .secondary-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         .back-btn {
@@ -305,9 +417,14 @@ function LoginForm() {
           font-size: 0.875rem;
         }
 
-        .back-btn:hover {
+        .back-btn:hover:not(:disabled) {
           background: var(--surface);
           color: var(--text);
+        }
+
+        .back-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         .status-message {
@@ -329,6 +446,14 @@ function LoginForm() {
           background: rgba(34, 197, 94, 0.1);
           color: var(--success);
           border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        .spinner {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
 
         .login-footer {
